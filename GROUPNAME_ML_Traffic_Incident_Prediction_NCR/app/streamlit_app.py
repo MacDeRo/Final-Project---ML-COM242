@@ -10,11 +10,107 @@ sys.path.insert(0, str(ROOT / "src"))
 
 import pandas as pd  # noqa: E402
 import streamlit as st  # noqa: E402
+import matplotlib  # noqa: E402
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt  # noqa: E402
 
 import config as C  # noqa: E402
 import inference as I  # noqa: E402
 
 st.set_page_config(page_title="NCR Road Crash Predictor", page_icon=":traffic_light:", layout="wide")
+
+# White background and black text theme
+st.markdown(
+    """
+    <style>
+    /* White background and black text */
+    .stApp, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
+        background-color: #FFFFFF !important;
+        color: #111111 !important;
+    }
+    header, footer {
+        background-color: #FFFFFF !important;
+    }
+    /* Headings and labels */
+    h1, h2, h3, h4, h5, h6 {
+        color: #000000 !important;
+        font-weight: 600 !important;
+    }
+    p, span, label {
+        color: #111111;
+    }
+    /* Metric styling */
+    [data-testid="stMetricValue"] {
+        color: #000000 !important;
+    }
+    [data-testid="stMetricLabel"] {
+        color: #333333 !important;
+    }
+    /* Action / Submit Buttons: solid black with crisp bold WHITE text */
+    .stButton > button,
+    button[kind="primary"],
+    button[data-testid="baseButton-primary"] {
+        background-color: #000000 !important;
+        border: 1px solid #000000 !important;
+        border-radius: 6px !important;
+        color: #FFFFFF !important;
+    }
+    .stButton > button *,
+    button[kind="primary"] *,
+    button[data-testid="baseButton-primary"] *,
+    .stButton > button p,
+    .stButton > button span,
+    .stButton > button div {
+        color: #FFFFFF !important;
+        font-weight: 600 !important;
+    }
+    .stButton > button:hover,
+    button[kind="primary"]:hover {
+        background-color: #333333 !important;
+        border-color: #333333 !important;
+    }
+    .stButton > button:hover *,
+    .stButton > button:hover p {
+        color: #FFFFFF !important;
+    }
+
+    /* Download Buttons: clean white with black border and black text */
+    .stDownloadButton > button,
+    button[kind="secondary"],
+    button[data-testid="baseButton-secondary"] {
+        background-color: #FFFFFF !important;
+        color: #000000 !important;
+        border: 1.5px solid #000000 !important;
+        border-radius: 6px !important;
+    }
+    .stDownloadButton > button *,
+    .stDownloadButton > button p,
+    .stDownloadButton > button span,
+    button[kind="secondary"] *,
+    button[kind="secondary"] p {
+        color: #000000 !important;
+        font-weight: 600 !important;
+    }
+    .stDownloadButton > button:hover {
+        background-color: #F4F4F5 !important;
+        border-color: #000000 !important;
+    }
+    .stDownloadButton > button:hover *,
+    .stDownloadButton > button:hover p {
+        color: #000000 !important;
+    }
+    /* Tabs */
+    button[data-baseweb="tab"] {
+        color: #444444 !important;
+    }
+    button[data-baseweb="tab"][aria-selected="true"] {
+        color: #000000 !important;
+        border-bottom-color: #000000 !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 
 @st.cache_resource
@@ -42,7 +138,12 @@ st.title("NCR Road Crash Predictor")
 st.caption(f"Model: **{meta['model_name']}** | trained on {meta['train_years'][0]}-"
            f"{meta['train_years'][1]} MMDA AADT and MMARAS data | decision-support tool only")
 
-tab_form, tab_csv, tab_about = st.tabs(["Single prediction", "Batch CSV upload", "About the model"])
+tab_form, tab_rec, tab_csv, tab_about = st.tabs([
+    "Single prediction",
+    "Recursive multi-year forecast",
+    "Batch CSV upload",
+    "About the model",
+])
 
 with tab_form:
     st.subheader("Estimate yearly crashes for one road")
@@ -82,7 +183,163 @@ with tab_form:
             m2.metric("Typical error (test MAE)", f"± {test_mae:,.0f}")
             m3.metric("Change vs previous year", f"{pred - prev:+,.0f}")
             st.caption("This model returns a single estimate and does not provide probabilities. "
-                       "The typical error is the average miss on the 2023-2024 test years.")
+                       "The typical error is the average miss on the 2023-2024 test years. "
+                       "To forecast further years where this estimate feeds into the next, "
+                       "switch to the **Recursive multi-year forecast** tab.")
+
+with tab_rec:
+    st.subheader("Iterative multi-year forecast (chain prediction)")
+    st.write(
+        "Forecast crashes sequentially across multiple future years. The model predicts Year 1 "
+        "using your baseline, then **recursively feeds that predicted value** as `prev_crashes` "
+        "for Year 2, Year 3, and beyond."
+    )
+
+    rec_roads = ["(enter values manually)"] + sorted(data["road"].unique())
+    rec_choice = st.selectbox("Start from an existing road (optional)", rec_roads, key="rec_road_choice")
+
+    rec_defaults = {"aadt": 150000.0, "prev_crashes": 2000.0, "lane_km": 100.0, "start_year": 2025}
+    if rec_choice != rec_roads[0]:
+        road_data = data[data["road"] == rec_choice].sort_values("year")
+        latest_row = road_data.iloc[-1]
+        rec_defaults = {
+            "aadt": float(latest_row["aadt"]),
+            # For 2025 forecast, the prior year is 2024 crashes:
+            "prev_crashes": float(latest_row["crashes"]) if pd.notna(latest_row["crashes"]) else 0.0,
+            "lane_km": float(latest_row["lane_km"]),
+            "start_year": int(latest_row["year"]) + 1,
+        }
+
+    r1, r2 = st.columns(2)
+    start_year = r1.number_input(
+        "First forecast year",
+        value=rec_defaults["start_year"],
+        step=1,
+        format="%d",
+        key="rec_start_yr",
+        help="The initial year to predict.",
+    )
+    horizon = r2.slider(
+        "Forecast horizon (number of years)",
+        min_value=1,
+        max_value=6,
+        value=3,
+        key="rec_horizon",
+        help="How many consecutive years to project recursively.",
+    )
+
+    r3, r4 = st.columns(2)
+    rec_prev = r3.number_input(
+        f"Baseline crashes recorded in {start_year - 1}",
+        value=rec_defaults["prev_crashes"],
+        step=10.0,
+        key="rec_prev_input",
+        help=f"The actual crashes from {start_year - 1} that initialize Step 1.",
+    )
+    rec_aadt = r4.number_input(
+        f"AADT in {start_year} (vehicles/day)",
+        value=rec_defaults["aadt"],
+        step=1000.0,
+        key="rec_aadt_input",
+        help="Starting annual average daily traffic.",
+    )
+
+    r5, r6 = st.columns(2)
+    rec_lane_km = r5.number_input(
+        "Lane-kilometers",
+        value=rec_defaults["lane_km"],
+        step=10.0,
+        key="rec_lane_input",
+    )
+    aadt_growth = r6.slider(
+        "Annual traffic (AADT) change (%)",
+        min_value=-5.0,
+        max_value=10.0,
+        value=0.0,
+        step=0.5,
+        key="rec_growth_input",
+        help="Annual traffic change rate applied across the forecast period (0% = constant traffic).",
+    )
+
+    if st.button("Generate recursive forecast", type="primary", key="btn_run_rec"):
+        fc_df = I.recursive_forecast(
+            model=model,
+            start_year=start_year,
+            horizon_years=horizon,
+            initial_prev_crashes=rec_prev,
+            initial_aadt=rec_aadt,
+            lane_km=rec_lane_km,
+            aadt_growth_pct=aadt_growth,
+            ranges=ranges,
+        )
+
+        has_error = fc_df["notes"].str.startswith("ERROR").any()
+        if has_error:
+            for _, r in fc_df[fc_df["notes"].str.startswith("ERROR")].iterrows():
+                st.error(f"Year {int(r['year'])}: {r['notes']}")
+        else:
+            y1_val = fc_df.iloc[0]["predicted_crashes"]
+            yN_val = fc_df.iloc[-1]["predicted_crashes"]
+            total_change = yN_val - rec_prev
+
+            col_m1, col_m2, col_m3 = st.columns(3)
+            col_m1.metric(f"{int(fc_df.iloc[0]['year'])} forecast", f"{y1_val:,.0f}")
+            col_m2.metric(f"{int(fc_df.iloc[-1]['year'])} forecast", f"{yN_val:,.0f}")
+            col_m3.metric(f"Net change vs {start_year - 1}", f"{total_change:+,.0f}")
+
+            # Plot forecast curve
+            fig, ax = plt.subplots(figsize=(7, 2.8))
+            fig.patch.set_facecolor('#FFFFFF')
+            ax.set_facecolor('#FFFFFF')
+            years_list = fc_df["year"].astype(int).tolist()
+            crashes_list = fc_df["predicted_crashes"].tolist()
+            ax.plot(years_list, crashes_list, marker='o', color='#000000', linewidth=2, markersize=6)
+            for yr_pt, cr_pt in zip(years_list, crashes_list):
+                ax.annotate(f"{cr_pt:,.0f}", (yr_pt, cr_pt), textcoords="offset points",
+                            xytext=(0, 7), ha='center', fontsize=9, fontweight='bold', color='#000000')
+            ax.set_xlabel("Year", color="#000000", fontsize=10)
+            ax.set_ylabel("Predicted Crashes", color="#000000", fontsize=10)
+            ax.set_xticks(years_list)
+            ax.tick_params(colors="#000000")
+            ax.grid(True, linestyle='--', alpha=0.25, color="#888888")
+            for sp in ax.spines.values():
+                sp.set_color('#333333')
+            plt.tight_layout()
+            st.pyplot(fig)
+            plt.close(fig)
+
+            # Display table
+            disp = fc_df[[
+                "year", "aadt", "prev_crashes", "prev_crashes_type",
+                "predicted_crashes", "change_vs_prev", "notes"
+            ]].copy()
+            disp.columns = [
+                "Year", "AADT (vehicles/day)", "Prev-Year Crashes Used",
+                "Input Source", "Predicted Crashes", "Change vs Prev Year", "Notes"
+            ]
+            disp["AADT (vehicles/day)"] = disp["AADT (vehicles/day)"].map("{:,.0f}".format)
+            disp["Prev-Year Crashes Used"] = disp["Prev-Year Crashes Used"].map("{:,.0f}".format)
+            disp["Predicted Crashes"] = disp["Predicted Crashes"].map("{:,.0f}".format)
+            disp["Change vs Prev Year"] = disp["Change vs Prev Year"].map("{:+,.0f}".format)
+
+            st.dataframe(disp, hide_index=True)
+
+            st.download_button(
+                "Download forecast CSV",
+                fc_df.to_csv(index=False),
+                file_name=f"recursive_forecast_{start_year}_{start_year + horizon - 1}.csv",
+                key="btn_dl_rec",
+            )
+
+            st.info(
+                "💡 **Recursive forecasting mechanism & caveats:**\n\n"
+                f"- **Step 1 ({start_year}):** Uses your entered baseline crashes ({rec_prev:,.0f}) from {start_year - 1}.\n"
+                "- **Step 2 and beyond:** Automatically inputs the previous step's forecast as `prev_crashes`.\n"
+                "- **Compounded uncertainty:** Since each prediction relies on a previous estimated value, "
+                "error bounds widen with each future year (typical test error is ±406 crashes per step).\n"
+                "- **Tree plateau:** Gradient Boosting models may level off if values approach or exceed the training boundaries."
+            )
+
 
 with tab_csv:
     st.subheader("Predict for many road-years")

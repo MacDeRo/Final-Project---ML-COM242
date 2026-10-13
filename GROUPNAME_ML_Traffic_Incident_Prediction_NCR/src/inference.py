@@ -71,3 +71,85 @@ def predict_frame(model, work: pd.DataFrame, problems: dict) -> pd.DataFrame:
         result.loc[ok, "predicted_crashes"] = model.predict(work.loc[ok, C.FEATURES])
     result["notes"] = [" | ".join(problems.get(i, [])) for i in work.index]
     return result
+
+
+def recursive_forecast(
+    model,
+    start_year: int,
+    horizon_years: int,
+    initial_prev_crashes: float,
+    initial_aadt: float,
+    lane_km: float,
+    aadt_growth_pct: float = 0.0,
+    ranges: dict | None = None,
+) -> pd.DataFrame:
+    """Perform recursive multi-year crash forecasting.
+
+    For year t = start_year:
+      - prev_crashes comes from the known/entered previous-year crash count.
+      - aadt is initial_aadt.
+
+    For year t > start_year:
+      - prev_crashes is taken from the model's prediction for year t - 1.
+      - aadt is compounded by aadt_growth_pct.
+    """
+    rows: list[dict] = []
+    current_prev = float(initial_prev_crashes)
+    current_aadt = float(initial_aadt)
+    growth_multiplier = 1.0 + (float(aadt_growth_pct) / 100.0)
+
+    for step in range(int(horizon_years)):
+        yr = int(start_year) + step
+        if step > 0:
+            current_aadt = max(1.0, current_aadt * growth_multiplier)
+
+        step_df = pd.DataFrame([{
+            "aadt": current_aadt,
+            "prev_crashes": current_prev,
+            "lane_km": float(lane_km),
+            "year": yr,
+        }])
+
+        work, problems = validate_frame(step_df, ranges)
+        errors = [m for m in problems.get(0, []) if m.startswith("ERROR")]
+        warnings = [m for m in problems.get(0, []) if m.startswith("WARNING")]
+
+        if errors:
+            rows.append({
+                "step": step + 1,
+                "year": yr,
+                "aadt": current_aadt,
+                "prev_crashes": current_prev,
+                "prev_crashes_type": "Entered / Baseline" if step == 0 else f"Estimated from {yr - 1}",
+                "predicted_crashes": float("nan"),
+                "change_vs_prev": float("nan"),
+                "notes": "ERROR: " + " | ".join(errors),
+            })
+            break
+
+        pred_res = predict_frame(model, work, problems)
+        raw_pred = float(pred_res["predicted_crashes"].iloc[0])
+        pred_val = max(0.0, raw_pred)
+
+        step_notes = warnings.copy()
+        if step == 0:
+            step_notes.append("1-year ahead (direct baseline)")
+        else:
+            step_notes.append(f"Recursive (fed {current_prev:,.0f} crashes from {yr - 1})")
+
+        rows.append({
+            "step": step + 1,
+            "year": yr,
+            "aadt": current_aadt,
+            "prev_crashes": current_prev,
+            "prev_crashes_type": "Entered / Baseline" if step == 0 else f"Estimated from {yr - 1}",
+            "predicted_crashes": pred_val,
+            "change_vs_prev": pred_val - current_prev,
+            "notes": " | ".join(step_notes),
+        })
+
+        # Next year's prev_crashes is this year's predicted crashes
+        current_prev = pred_val
+
+    return pd.DataFrame(rows)
+
