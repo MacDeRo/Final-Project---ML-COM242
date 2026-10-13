@@ -40,8 +40,7 @@ beat it. On EDSA (unseen road) Linear Regression is best (MAE 2182, R2 0.20);
 tree models cannot extrapolate to EDSA's much larger values.
 
 ## App input
-- **Single prediction:** AADT, previous-year crashes, lane-km, year.
-- **Recursive multi-year forecast:** Iteratively projects crashes across consecutive future years (e.g. 2025 to 2028). The prediction from each year is fed as the `prev_crashes` input for the subsequent year, with optional annual traffic growth assumptions.
+- **Predict crashes:** start year (last year with known crashes), end year, crashes in the start year, AADT, lane-km. If the end year is one year after the start year, it gives a single prediction. If it is further away (e.g. 2024 to 2026), the app automatically forecasts recursively: each predicted year is fed as `prev_crashes` for the next, with an optional annual traffic change assumption.
 - **Batch prediction:** CSV with columns `aadt, prev_crashes, lane_km, year`. Invalid values (negative, missing, text) give an error; values outside the training range give a warning.
 
 ## Limitations
