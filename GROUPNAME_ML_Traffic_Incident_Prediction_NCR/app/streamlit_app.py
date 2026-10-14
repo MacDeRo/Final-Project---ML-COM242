@@ -19,41 +19,37 @@ import inference as I  # noqa: E402
 
 st.set_page_config(page_title="NCR Road Crash Predictor", page_icon=":traffic_light:", layout="wide")
 
-# White background and black text theme
 st.markdown(
     """
     <style>
-    /* White background and black text */
-    .stApp, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
-        background-color: #FFFFFF !important;
-        color: #111111 !important;
+    /* Keep the application surface, header, sidebar, and content containers dark. */
+    .stApp, [data-testid="stAppViewContainer"], [data-testid="stHeader"],
+    [data-testid="stSidebar"], [data-testid="stDecoration"] {
+        background-color: #0E1117 !important;
+        color: #FAFAFA !important;
     }
     header, footer {
-        background-color: #FFFFFF !important;
+        background-color: #0E1117 !important;
     }
-    /* Headings and labels */
     h1, h2, h3, h4, h5, h6 {
-        color: #000000 !important;
+        color: #FAFAFA !important;
         font-weight: 600 !important;
     }
     p, span, label {
-        color: #111111;
+        color: #FAFAFA;
     }
-    /* Metric styling */
     [data-testid="stMetricValue"] {
-        color: #000000 !important;
+        color: #FAFAFA !important;
     }
     [data-testid="stMetricLabel"] {
-        color: #333333 !important;
+        color: #B8B8B8 !important;
     }
-    /* Action / Submit Buttons: solid black with crisp bold WHITE text */
     .stButton > button,
     button[kind="primary"],
     button[data-testid="baseButton-primary"] {
-        background-color: #000000 !important;
-        border: 1px solid #000000 !important;
-        border-radius: 6px !important;
-        color: #FFFFFF !important;
+        background-color: #FAFAFA !important;
+        border: 1px solid #FAFAFA !important;
+        color: #0E1117 !important;
     }
     .stButton > button *,
     button[kind="primary"] *,
@@ -61,26 +57,24 @@ st.markdown(
     .stButton > button p,
     .stButton > button span,
     .stButton > button div {
-        color: #FFFFFF !important;
+        color: #0E1117 !important;
         font-weight: 600 !important;
     }
     .stButton > button:hover,
     button[kind="primary"]:hover {
-        background-color: #333333 !important;
-        border-color: #333333 !important;
+        background-color: #D6D6D6 !important;
+        border-color: #D6D6D6 !important;
     }
     .stButton > button:hover *,
     .stButton > button:hover p {
-        color: #FFFFFF !important;
+        color: #0E1117 !important;
     }
-
-    /* Download Buttons: clean white with black border and black text */
     .stDownloadButton > button,
     button[kind="secondary"],
     button[data-testid="baseButton-secondary"] {
-        background-color: #FFFFFF !important;
-        color: #000000 !important;
-        border: 1.5px solid #000000 !important;
+        background-color: #262730 !important;
+        color: #FAFAFA !important;
+        border: 1.5px solid #FAFAFA !important;
         border-radius: 6px !important;
     }
     .stDownloadButton > button *,
@@ -88,24 +82,23 @@ st.markdown(
     .stDownloadButton > button span,
     button[kind="secondary"] *,
     button[kind="secondary"] p {
-        color: #000000 !important;
+        color: #FAFAFA !important;
         font-weight: 600 !important;
     }
     .stDownloadButton > button:hover {
-        background-color: #F4F4F5 !important;
-        border-color: #000000 !important;
+        background-color: #3A3B47 !important;
+        border-color: #FAFAFA !important;
     }
     .stDownloadButton > button:hover *,
     .stDownloadButton > button:hover p {
-        color: #000000 !important;
+        color: #FAFAFA !important;
     }
-    /* Tabs */
     button[data-baseweb="tab"] {
-        color: #444444 !important;
+        color: #B8B8B8 !important;
     }
     button[data-baseweb="tab"][aria-selected="true"] {
-        color: #000000 !important;
-        border-bottom-color: #000000 !important;
+        color: #FAFAFA !important;
+        border-bottom-color: #FAFAFA !important;
     }
     </style>
     """,
@@ -206,10 +199,6 @@ with tab_main:
                 for _, r in fc_df[fc_df["notes"].str.contains("ERROR")].iterrows():
                     st.error(f"Year {int(r['year'])}: {r['notes'].replace('ERROR: ', '')}")
             else:
-                warns = sorted({n.replace("WARNING: ", "") for note in fc_df["notes"]
-                                for n in note.split(" | ") if n.startswith("WARNING")})
-                for w in warns:
-                    st.warning(w)
                 pred = float(fc_df.iloc[-1]["predicted_crashes"])
                 m1, m2, m3 = st.columns(3)
                 m1.metric(f"Predicted crashes in {int(end_year)}", f"{pred:,.0f}")
@@ -226,32 +215,32 @@ with tab_main:
                         "tend to level off beyond the training range, so treat later years as rough scenarios."
                     )
                     fig, ax = plt.subplots(figsize=(7, 2.8))
-                    fig.patch.set_facecolor('#FFFFFF')
-                    ax.set_facecolor('#FFFFFF')
+                    fig.patch.set_facecolor('#0E1117')
+                    ax.set_facecolor('#0E1117')
                     years_list = fc_df["year"].astype(int).tolist()
                     crashes_list = fc_df["predicted_crashes"].tolist()
-                    ax.plot(years_list, crashes_list, marker='o', color='#000000', linewidth=2, markersize=6)
+                    ax.plot(years_list, crashes_list, marker='o', color='#FAFAFA', linewidth=2, markersize=6)
                     for yr_pt, cr_pt in zip(years_list, crashes_list):
                         ax.annotate(f"{cr_pt:,.0f}", (yr_pt, cr_pt), textcoords="offset points",
-                                    xytext=(0, 7), ha='center', fontsize=9, fontweight='bold', color='#000000')
-                    ax.set_xlabel("Year", color="#000000", fontsize=10)
-                    ax.set_ylabel("Predicted Crashes", color="#000000", fontsize=10)
+                                    xytext=(0, 7), ha='center', fontsize=9, fontweight='bold', color='#FAFAFA')
+                    ax.set_xlabel("Year", color="#FAFAFA", fontsize=10)
+                    ax.set_ylabel("Predicted Crashes", color="#FAFAFA", fontsize=10)
                     ax.set_xticks(years_list)
-                    ax.tick_params(colors="#000000")
+                    ax.tick_params(colors="#FAFAFA")
                     ax.grid(True, linestyle='--', alpha=0.25, color="#888888")
                     for sp in ax.spines.values():
-                        sp.set_color('#333333')
+                        sp.set_color('#B8B8B8')
                     plt.tight_layout()
                     st.pyplot(fig)
                     plt.close(fig)
 
                     disp = fc_df[[
                         "year", "aadt", "prev_crashes", "prev_crashes_type",
-                        "predicted_crashes", "change_vs_prev", "notes"
+                        "predicted_crashes", "change_vs_prev"
                     ]].copy()
                     disp.columns = [
                         "Year", "AADT (vehicles/day)", "Prev-Year Crashes Used",
-                        "Input Source", "Predicted Crashes", "Change vs Prev Year", "Notes"
+                        "Input Source", "Predicted Crashes", "Change vs Prev Year"
                     ]
                     disp["AADT (vehicles/day)"] = disp["AADT (vehicles/day)"].map("{:,.0f}".format)
                     disp["Prev-Year Crashes Used"] = disp["Prev-Year Crashes Used"].map("{:,.0f}".format)
@@ -261,7 +250,7 @@ with tab_main:
 
                     st.download_button(
                         "Download forecast CSV",
-                        fc_df.to_csv(index=False),
+                        fc_df.drop(columns=["notes"]).to_csv(index=False),
                         file_name=f"forecast_{int(start_year) + 1}_{int(end_year)}.csv",
                         key="btn_dl_rec",
                     )
@@ -285,12 +274,15 @@ with tab_csv:
             bad = sum(any(m.startswith("ERROR") for m in v) for v in problems.values())
             st.success(f"{len(res) - bad} of {len(res)} rows predicted; {bad} rejected.") if bad < len(res) \
                 else st.error("No valid rows to predict.")
-            st.dataframe(res)
-            st.download_button("Download results", res.to_csv(index=False), "predictions.csv")
+            display_res = res.drop(columns=["notes"])
+            st.dataframe(display_res)
+            st.download_button("Download results", display_res.to_csv(index=False), "predictions.csv")
         except ValueError as e:
             st.error(str(e))
-        except Exception:
-            st.error("The file could not be read as a CSV. Check the format and try again.")
+        except (pd.errors.ParserError, UnicodeDecodeError) as e:
+            st.error(f"The CSV could not be read: {e}")
+        except Exception as e:
+            st.error(f"The CSV could not be processed: {type(e).__name__}: {e}")
 
 with tab_about:
     st.subheader("How the model was chosen")

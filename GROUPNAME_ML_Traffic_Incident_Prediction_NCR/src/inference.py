@@ -30,6 +30,13 @@ def validate_frame(df: pd.DataFrame, ranges: dict | None = None):
     predicted but flagged because they lie outside the training range.
     """
     problems: dict[int, list[str]] = {}
+    df = df.copy()
+    df.columns = (
+        df.columns.astype(str)
+        .str.replace("\ufeff", "", regex=False)
+        .str.strip()
+        .str.lower()
+    )
     missing_cols = [c for c in REQUIRED if c not in df.columns]
     if missing_cols:
         raise ValueError(f"Missing required column(s): {', '.join(missing_cols)}. "
@@ -152,4 +159,3 @@ def recursive_forecast(
         current_prev = pred_val
 
     return pd.DataFrame(rows)
-
