@@ -250,8 +250,9 @@ with tab_main:
 
                 st.download_button(
                     "Download forecast CSV",
-                    fc_df.drop(columns=["notes"]).to_csv(index=False),
+                    fc_df.drop(columns=["notes"]).to_csv(index=False).encode("utf-8"),
                     file_name=f"forecast_{int(start_year) + 1}_{int(end_year)}.csv",
+                    mime="text/csv",
                     key="btn_dl_rec",
                 )
 
@@ -262,7 +263,13 @@ with tab_csv:
              "(an optional `road` column is kept in the output).")
     template = pd.DataFrame({"road": ["EXAMPLE ROAD"], "aadt": [150000], "prev_crashes": [2000],
                              "lane_km": [100.0], "year": [2025]})
-    st.download_button("Download CSV template", template.to_csv(index=False), "template.csv")
+    st.download_button(
+        "Download CSV template",
+        template.to_csv(index=False).encode("utf-8"),
+        file_name="template.csv",
+        mime="text/csv",
+        key="btn_dl_template",
+    )
     up = st.file_uploader("CSV file", type=["csv"])
     if up is not None:
         try:
@@ -272,11 +279,25 @@ with tab_csv:
             work, problems = I.validate_frame(raw, ranges)
             res = I.predict_frame(model, work, problems)
             bad = sum(any(m.startswith("ERROR") for m in v) for v in problems.values())
-            st.success(f"{len(res) - bad} of {len(res)} rows predicted; {bad} rejected.") if bad < len(res) \
-                else st.error("No valid rows to predict.")
+            if bad < len(res):
+                st.success(f"{len(res) - bad} of {len(res)} rows predicted; {bad} rejected.")
+            else:
+                st.error("No valid rows to predict.")
             display_res = res.drop(columns=["notes"])
-            st.dataframe(display_res)
-            st.download_button("Download results", display_res.to_csv(index=False), "predictions.csv")
+            try:
+                st.dataframe(display_res, hide_index=True)
+            except Exception as e:
+                raise RuntimeError(f"Could not render prediction table: {e}") from e
+            try:
+                st.download_button(
+                    "Download results",
+                    display_res.to_csv(index=False).encode("utf-8"),
+                    file_name="predictions.csv",
+                    mime="text/csv",
+                    key="btn_dl_batch",
+                )
+            except Exception as e:
+                raise RuntimeError(f"Could not prepare prediction download: {e}") from e
         except ValueError as e:
             st.error(str(e))
         except (pd.errors.ParserError, UnicodeDecodeError) as e:
