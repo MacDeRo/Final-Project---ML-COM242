@@ -234,26 +234,26 @@ with tab_main:
                     st.pyplot(fig)
                     plt.close(fig)
 
-                    disp = fc_df[[
-                        "year", "aadt", "prev_crashes", "prev_crashes_type",
-                        "predicted_crashes", "change_vs_prev"
-                    ]].copy()
-                    disp.columns = [
-                        "Year", "AADT (vehicles/day)", "Prev-Year Crashes Used",
-                        "Input Source", "Predicted Crashes", "Change vs Prev Year"
-                    ]
-                    disp["AADT (vehicles/day)"] = disp["AADT (vehicles/day)"].map("{:,.0f}".format)
-                    disp["Prev-Year Crashes Used"] = disp["Prev-Year Crashes Used"].map("{:,.0f}".format)
-                    disp["Predicted Crashes"] = disp["Predicted Crashes"].map("{:,.0f}".format)
-                    disp["Change vs Prev Year"] = disp["Change vs Prev Year"].map("{:+,.0f}".format)
-                    st.dataframe(disp, hide_index=True)
+                disp = fc_df[[
+                    "year", "aadt", "prev_crashes", "prev_crashes_type",
+                    "predicted_crashes", "change_vs_prev"
+                ]].copy()
+                disp.columns = [
+                    "Year", "AADT (vehicles/day)", "Prev-Year Crashes Used",
+                    "Input Source", "Predicted Crashes", "Change vs Prev Year"
+                ]
+                disp["AADT (vehicles/day)"] = disp["AADT (vehicles/day)"].map("{:,.0f}".format)
+                disp["Prev-Year Crashes Used"] = disp["Prev-Year Crashes Used"].map("{:,.0f}".format)
+                disp["Predicted Crashes"] = disp["Predicted Crashes"].map("{:,.0f}".format)
+                disp["Change vs Prev Year"] = disp["Change vs Prev Year"].map("{:+,.0f}".format)
+                st.dataframe(disp, hide_index=True)
 
-                    st.download_button(
-                        "Download forecast CSV",
-                        fc_df.drop(columns=["notes"]).to_csv(index=False),
-                        file_name=f"forecast_{int(start_year) + 1}_{int(end_year)}.csv",
-                        key="btn_dl_rec",
-                    )
+                st.download_button(
+                    "Download forecast CSV",
+                    fc_df.drop(columns=["notes"]).to_csv(index=False),
+                    file_name=f"forecast_{int(start_year) + 1}_{int(end_year)}.csv",
+                    key="btn_dl_rec",
+                )
 
 
 with tab_csv:
